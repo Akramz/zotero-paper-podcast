@@ -1,8 +1,10 @@
 # Personalized Research Podcasts
 
-A system that creates daily personalized Spotify Postcasts from academic papers you bookmarked in Zotero.
+A system that automatically delivers daily personalized Spotify Postcasts from academic papers you bookmarked in Zotero.
 
 ## Overview
+
+![System Components](static/components.png)
 
 The repo covers the following:
 1. Fetches papers you've bookmarked in Zotero,
