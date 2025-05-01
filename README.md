@@ -1,6 +1,6 @@
 # Personalized Research Podcasts
 
-A system that automatically delivers daily personalized Spotify Postcasts from academic papers you bookmarked in Zotero.
+An LLM system that automatically delivers daily personalized Spotify Postcasts from academic papers you bookmarked in Zotero.
 
 > **Note:** This project is currently a work in progress and in proof-of-concept stage.
 
