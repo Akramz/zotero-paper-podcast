@@ -6,7 +6,7 @@ An LLM system that automatically delivers daily personalized Spotify Postcasts f
 
 ## Overview
 
-![System Components](static/components.png)
+![System Components](static/components_.png)
 
 The repo covers the following:
 1. Fetches papers you've bookmarked in Zotero,
