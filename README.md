@@ -2,6 +2,8 @@
 
 A system that automatically delivers daily personalized Spotify Postcasts from academic papers you bookmarked in Zotero.
 
+> **Note:** This project is currently a work in progress and in proof-of-concept stage.
+
 ## Overview
 
 ![System Components](static/components.png)
@@ -97,14 +99,9 @@ crontab -e
 - Set up CloudWatch alarms for cost monitoring
 - Configure OpenAI budget alerts
 
-## Monitoring and Cost Control
+## TODO
 
-- Log each OpenAI completion and TTS call with token/sec counts
-- Set hard budget alerts in the OpenAI dashboard
-- Use CloudWatch alarms on S3 and instance CPU for anomalies
-
-## Troubleshooting
-
-- Check logs at `/var/log/papercast.log`
-- Ensure your Zotero items have PDF attachments
-- Verify S3 bucket permissions
+- Use OpenAI assistant API to serve papers as attachments
+- Ensure multi-paper jobs produce coherent podcast episodes
+- Add support for conversation-based podcasts
+- Add docs for Azure Cloud setup
