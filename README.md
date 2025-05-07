@@ -18,38 +18,61 @@ Once set up, you will get daily paper summaries based on your recent paper bookm
 
 ## Setup Instructions
 
-### AWS Setup
+### S3 Bucket Setup
 
-1. Launch a `t3.small` (or similar) [EC2](https://console.aws.amazon.com/ec2/) instance running `Ubuntu 22.04`
-2. Create an [IAM role](https://console.aws.amazon.com/iam/home#/roles) with S3 read/write access limited to your chosen bucket
-3. Attach the IAM role to your EC2 instance.
-4. Create an S3 bucket (e.g. papers-podcast-bucket) with the following structure:
-   - `audio/` - Holds generated MP3 files
-   - `rss/` - Holds the podcast feed.xml file
-5. Configure bucket hosting:
-   - Enable static website hosting on the bucket or serve through CloudFront.
-   - Make audio/ and rss/feed.xml public-read. A simple bucket policy with "Allow": "s3:GetObject" for those paths is sufficient.
-   - Verify https://<bucket-url>/rss/feed.xml loads in a browser.
+Create an S3 bucket (e.g. papers-podcast-bucket) with the following structure:
+- `audio/` - Holds generated MP3 files
+- `rss/` - Holds the podcast feed.xml file
+
+Configure bucket hosting:
+- Enable static website hosting on the bucket or serve through CloudFront.
+- Make audio/ and rss/feed.xml public-read. A simple bucket policy with "Allow": "s3:GetObject" for those paths is sufficient.
+- Verify https://<bucket-url>/rss/feed.xml loads in a browser.
+
+### AWS Credentials Setup
+
+To allow the app to upload files to your S3 bucket:
+
+1. Create an IAM user with S3 access:
+   - Go to [AWS IAM Console](https://console.aws.amazon.com/iam/)
+   - Create a new user with programmatic access
+   - Attach the `AmazonS3FullAccess` policy or a custom policy with access to your specific bucket
+
+2. Get your credentials:
+   - After creating the user, save the Access Key ID and Secret Access Key
+
+3. Configure credentials on your machine:
+   ```bash
+   aws configure
+   # Enter your Access Key ID and Secret Access Key when prompted
+   # Set your default region (e.g., us-east-1)
+   # Set output format (json recommended)
+   ```
+
+   Alternatively, create `~/.aws/credentials` with:
+   ```
+   [default]
+   aws_access_key_id = YOUR_ACCESS_KEY
+   aws_secret_access_key = YOUR_SECRET_KEY
+   ```
+
+   The app will automatically use these credentials when accessing S3.
 
 ### Local Environment Setup
 
-Run these commands on your EC2 instance:
-
 ```bash
-# Add 1GB of swap memory (Optional)
-sudo dd if=/dev/zero of=/swapfile bs=1M count=1024
-sudo chmod 600 /swapfile
-sudo mkswap /swapfile
-sudo swapon /swapfile
+# Install required packages (macOS)
+brew install python ffmpeg poppler
 
-# Install packages
-sudo apt update && sudo apt install -y python3-pip ffmpeg git poppler-utils
+# For Linux
+# sudo apt update && sudo apt install -y python3-pip ffmpeg git poppler-utils
 
-# Install mamba
-wget -q https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh
-bash Miniforge3-Linux-x86_64.sh -b
+# Install mamba/conda
+# Follow installation instructions for your OS from: https://github.com/conda-forge/miniforge
 
 # Install required packages
+mamba create -n p2p python=3.12
+conda activate p2p
 pip install -r requirements.txt
 ```
 
@@ -68,8 +91,7 @@ Set up a cron job to run the script daily:
 
 ```bash
 crontab -e
-# Add this line (runs daily at 2:15 AM):
-15 02 * * * /home/ubuntu/miniforge3/bin/python /home/ubuntu/repos/paper-speed-reader/main.py >> /var/log/papercast.log 2>&1
+00 22 * * * /path/to/conda/envs/p2p/bin/python /path/to/zotero-paper-podcast/main.py
 ```
 
 ## Usage
@@ -95,8 +117,6 @@ crontab -e
 
 - Keep your `.env` file private and readable only by your user
 - Rotate API keys periodically
-- Enable automatic security updates on the VM (unattended-upgrades)
-- Set up CloudWatch alarms for cost monitoring
 - Configure OpenAI budget alerts
 
 ## TODO
@@ -104,4 +124,4 @@ crontab -e
 - Use OpenAI assistant API to serve papers as attachments
 - Ensure multi-paper jobs produce coherent podcast episodes
 - Add support for conversation-based podcasts
-- Add docs for Azure Cloud setup
+- Update the feed file with new episodes (instead of resetting it to one episode)

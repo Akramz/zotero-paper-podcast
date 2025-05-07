@@ -6,7 +6,6 @@ import tempfile
 from pathlib import Path
 import logging
 from dotenv import load_dotenv
-from pdb import set_trace
 import summarize
 import tts
 import rss
@@ -48,30 +47,25 @@ def main():
 
         logger.info(f"Processing {len(queue_items)} papers")
 
-        mp3_paths = []
+        paper_summaries = []
         processed_items = []
 
         # Process each paper
         for item in queue_items:
             try:
                 item_key = item["key"]
-                logger.info(
-                    f"Processing item {item_key}: {item.get('title', 'Unknown')}"
-                )
+                logger.info(f"Processing item {item_key}")
 
                 # Download PDF
                 pdf_path = tmp_path / f"{item_key}.pdf"
                 utils.download_zotero_pdf(item, pdf_path)
 
-                # Summarize the paper
+                # Extract text from PDF
                 paper_text = utils.extract_text_from_pdf(pdf_path)
-                summary = summarize.create_summary(paper_text)
 
-                # Convert to speech
-                mp3_path = tmp_path / f"{item_key}.mp3"
-                tts.create_audio(summary, mp3_path)
-
-                mp3_paths.append(mp3_path)
+                # Create summary for individual paper
+                paper_summary = summarize.create_summary(paper_text)
+                paper_summaries.append(paper_summary)
                 processed_items.append(item)
 
             except Exception as e:
@@ -79,13 +73,25 @@ def main():
                     f"Error processing item {item.get('key', 'unknown')}: {str(e)}"
                 )
 
-        if not mp3_paths:
+        if not paper_summaries:
             logger.warning("No items were successfully processed")
             return
 
-        # Concatenate all MP3s
+        # Create temp directory for audio chunks
+        audio_chunks = []
+
+        # Process each paper summary
+        for i, summary in enumerate(paper_summaries):
+            paper_text = f"Let's discuss the next paper:\n\n{summary}\n\n"
+            paper_path = tmp_path / f"paper_{i}.mp3"
+            logger.info(f"Generating audio for paper {i+1}")
+            tts.create_audio(paper_text, paper_path)
+            audio_chunks.append(paper_path)
+
+        # Combine all audio chunks
         episode_path = tmp_path / episode_filename
-        utils.concatenate_audio_files(mp3_paths, episode_path)
+        logger.info("Combining all audio segments")
+        utils.concatenate_audio_files(audio_chunks, episode_path)
 
         # Upload to S3
         s3_audio_key = f"audio/{episode_filename}"

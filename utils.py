@@ -68,16 +68,32 @@ def download_zotero_pdf(item, output_path):
         if link_mode == "imported_url" and pdf_item["data"].get("url"):
             # For externally linked PDFs, download directly from the URL
             pdf_url = pdf_item["data"]["url"]
+
+            # Check if URL is from arxiv
+            if "arxiv" not in pdf_url.lower():
+                logger.info(f"Skipping non-arxiv URL: {pdf_url}")
+                raise ValueError(f"Not an arxiv URL: {pdf_url}")
+
             logger.info(f"Downloading PDF from external URL: {pdf_url}")
 
-            response = requests.get(pdf_url, stream=True)
-            response.raise_for_status()
+            try:
+                response = requests.get(pdf_url, stream=True, timeout=10)
+                response.raise_for_status()
 
-            with open(output_path, "wb") as f:
-                for chunk in response.iter_content(chunk_size=8192):
-                    f.write(chunk)
+                with open(output_path, "wb") as f:
+                    for chunk in response.iter_content(chunk_size=8192):
+                        f.write(chunk)
+            except requests.exceptions.Timeout:
+                logger.error(f"Timeout downloading PDF from {pdf_url}")
+                raise TimeoutError(f"Download timeout for {pdf_url}")
         else:
-            # For Zotero-stored PDFs, use the standard approach
+            # For Zotero-stored PDFs, check if original URL is from arxiv
+            url = pdf_item["data"].get("url", "")
+            if not url or "arxiv" not in url.lower():
+                logger.info(f"Skipping non-arxiv or missing URL: {url}")
+                raise ValueError(f"Not an arxiv URL or URL missing")
+
+            # Try using dump function
             pdf_key = pdf_item["key"]
             try:
                 # Try using dump function
@@ -95,13 +111,17 @@ def download_zotero_pdf(item, output_path):
                     )
                     headers = {"Zotero-API-Key": api_key}
 
-                    response = requests.get(
-                        file_url, headers=headers, allow_redirects=True
-                    )
-                    response.raise_for_status()
+                    try:
+                        response = requests.get(
+                            file_url, headers=headers, allow_redirects=True, timeout=10
+                        )
+                        response.raise_for_status()
 
-                    with open(output_path, "wb") as f:
-                        f.write(response.content)
+                        with open(output_path, "wb") as f:
+                            f.write(response.content)
+                    except requests.exceptions.Timeout:
+                        logger.error(f"Timeout downloading PDF from {file_url}")
+                        raise TimeoutError(f"Download timeout for {file_url}")
                 except Exception as file_error:
                     logger.error(
                         f"All download attempts failed. Last error: {str(file_error)}"

@@ -26,20 +26,37 @@ def create_audio(text, output_path):
         # Ensure the output directory exists
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Call the OpenAI TTS API
-        response = client.audio.speech.create(
-            model="tts-1",
-            voice="alloy",  # Options: alloy, echo, fable, onyx, nova, shimmer
-            input=text,
-        )
+        # Split text into chunks of 4000 characters
+        chunks = [text[i : i + 4000] for i in range(0, len(text), 4000)]
+        temp_files = []
 
-        # Save the audio file
-        response.stream_to_file(str(output_path))
+        # Process each chunk
+        for i, chunk in enumerate(chunks):
+            temp_path = output_path.parent / f"chunk_{i}.mp3"
+            response = client.audio.speech.create(
+                model="tts-1",
+                voice="alloy",
+                input=chunk,
+            )
+            response.stream_to_file(str(temp_path))
+            temp_files.append(temp_path)
+
+        # If only one chunk, just rename it
+        if len(temp_files) == 1:
+            temp_files[0].rename(output_path)
+        else:
+            # Concatenate all chunks
+            from utils import concatenate_audio_files
+
+            concatenate_audio_files(temp_files, output_path)
+
+        # Clean up temp files
+        for temp_file in temp_files:
+            if temp_file.exists():
+                temp_file.unlink()
 
         file_size = output_path.stat().st_size
-        duration_estimate = (
-            file_size / 1024 / 25
-        )  # Rough estimate: ~25KB per second of audio
+        duration_estimate = file_size / 1024 / 25
 
         logger.info(
             f"Audio created successfully. Size: {file_size/1024:.2f}KB, "

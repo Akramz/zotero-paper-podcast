@@ -10,23 +10,22 @@ load_dotenv()
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-SYSTEM_PROMPT = """You are an expert summarizer of academic papers, particularly in geospatial machine learning. 
+SYSTEM_PROMPT = """You are an expert summarizer of academic papers. 
 Your task is to create engaging, podcast-friendly summaries that capture the essence of research papers.
 Keep your responses clear, engaging and suitable for audio consumption."""
 
 USER_PROMPT_TEMPLATE = """Answer the following questions about the paper in a podcast-friendly tone:
 1. What is the title of the paper?
-2. Which institution the authors come from and who is the first author?
+2. What institution(s) the authors come from?
 3. What is the problem addressed by the paper?
 4. Why is it an interesting problem?
 5. What dataset(s) were used in the paper?
 6. What is the proposed solution?
-7. What is novel about the solution?
+7. What metrics were used to measure performance and what were the results?
 8. What baselines were compared against?
-9. What was achieved by the solution?
-10. What comes next?
+9. What limitations does the paper mention?
 
-The paper text has been truncated to fit within token limits. Focus on extracting information from the available content.
+The paper text has been truncated to fit within token limits. Focus on extracting information from the available content. Don't start with an intro, dive straight into the paper. Keep it short and concise.
 
 Paper content below:
 {paper_text}"""

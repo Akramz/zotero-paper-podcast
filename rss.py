@@ -39,22 +39,15 @@ def update_feed(audio_url, size_bytes, episode_date):
         tmp_feed_path = Path("/tmp/feed.xml")
         s3_client = boto3.client("s3")
 
-        # Try to download existing feed
-        try:
-            s3_client.download_file(s3_bucket, "rss/feed.xml", str(tmp_feed_path))
-            podcast = Podcast.load(str(tmp_feed_path))
-            logger.info("Loaded existing RSS feed")
-        except Exception:
-            logger.info("Creating new RSS feed")
-            # Create new podcast feed
-            podcast = Podcast(
-                name=podcast_title,
-                website=feed_url,
-                description=f"Daily summaries of the latest papers in geospatial machine learning",
-                explicit=False,
-                authors=[Person(author_name)],
-                language="en",
-            )
+        # Create new podcast object
+        podcast = Podcast(
+            name=podcast_title,
+            website=feed_url,
+            description=f"Daily summaries of the latest papers in AI",
+            explicit=False,
+            authors=[Person(author_name)],
+            language="en",
+        )
 
         # Parse the date
         pub_date = (
