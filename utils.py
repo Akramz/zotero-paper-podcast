@@ -10,6 +10,9 @@ from pyzotero import zotero
 from pydub import AudioSegment
 from dotenv import load_dotenv
 
+# Add homebrew bin to PATH for cronjob compatibility
+os.environ["PATH"] = "/opt/homebrew/bin:" + os.environ.get("PATH", "")
+
 logger = logging.getLogger(__name__)
 
 load_dotenv()
@@ -147,7 +150,8 @@ def extract_text_from_pdf(pdf_path):
 
         # Use pdftotext (from poppler-utils) to extract text
         subprocess.run(
-            ["pdftotext", "-layout", str(pdf_path), tmp_txt_path], check=True
+            ["/opt/homebrew/bin/pdftotext", "-layout", str(pdf_path), tmp_txt_path],
+            check=True,
         )
 
         # Read the text file
