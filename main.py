@@ -60,11 +60,8 @@ def main():
                 pdf_path = tmp_path / f"{item_key}.pdf"
                 utils.download_zotero_pdf(item, pdf_path)
 
-                # Extract text from PDF
-                paper_text = utils.extract_text_from_pdf(pdf_path)
-
-                # Create summary for individual paper
-                paper_summary = summarize.create_summary(paper_text)
+                # Create summary for individual paper using the entire PDF
+                paper_summary = summarize.create_summary_from_pdf(pdf_path)
                 paper_summaries.append(paper_summary)
                 processed_items.append(item)
 
