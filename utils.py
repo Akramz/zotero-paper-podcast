@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
 import os
 import logging
-import subprocess
-import tempfile
 from pathlib import Path
 import boto3
 import requests
 from pyzotero import zotero
 from pydub import AudioSegment
+from openai import OpenAI
 from dotenv import load_dotenv
 
 # Add homebrew bin to PATH for cronjob compatibility
@@ -16,6 +15,8 @@ os.environ["PATH"] = "/opt/homebrew/bin:" + os.environ.get("PATH", "")
 logger = logging.getLogger(__name__)
 
 load_dotenv()
+
+openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 
 def get_queued_zotero_items():
@@ -39,9 +40,9 @@ def get_queued_zotero_items():
         raise
 
 
-def download_zotero_pdf(item, output_path):
-    """Download a PDF file from a Zotero item"""
-    logger.info(f"Downloading PDF for item {item.get('key')}")
+def get_pdf_url(item):
+    """Extract PDF URL from a Zotero item"""
+    logger.info(f"Getting PDF URL for item {item.get('key')}")
 
     api_key = os.getenv("ZOTERO_API_KEY")
     user_id = os.getenv("ZOTERO_USER_ID")
@@ -67,110 +68,28 @@ def download_zotero_pdf(item, output_path):
         pdf_item = pdf_items[0]
         link_mode = pdf_item["data"].get("linkMode")
 
+        pdf_url = None
+
         # Check if this is an external URL
         if link_mode == "imported_url" and pdf_item["data"].get("url"):
-            # For externally linked PDFs, download directly from the URL
             pdf_url = pdf_item["data"]["url"]
-
-            # Check if URL is from arxiv
-            if "arxiv" not in pdf_url.lower():
-                logger.info(f"Skipping non-arxiv URL: {pdf_url}")
-                raise ValueError(f"Not an arxiv URL: {pdf_url}")
-
-            logger.info(f"Downloading PDF from external URL: {pdf_url}")
-
-            try:
-                response = requests.get(pdf_url, stream=True, timeout=10)
-                response.raise_for_status()
-
-                with open(output_path, "wb") as f:
-                    for chunk in response.iter_content(chunk_size=8192):
-                        f.write(chunk)
-            except requests.exceptions.Timeout:
-                logger.error(f"Timeout downloading PDF from {pdf_url}")
-                raise TimeoutError(f"Download timeout for {pdf_url}")
         else:
-            # For Zotero-stored PDFs, check if original URL is from arxiv
-            url = pdf_item["data"].get("url", "")
-            if not url or "arxiv" not in url.lower():
-                logger.info(f"Skipping non-arxiv or missing URL: {url}")
-                raise ValueError(f"Not an arxiv URL or URL missing")
+            # For Zotero-stored PDFs, check if original URL exists
+            pdf_url = pdf_item["data"].get("url", "")
 
-            # Try using dump function
-            pdf_key = pdf_item["key"]
-            try:
-                # Try using dump function
-                zot.dump(
-                    pdf_key, os.path.basename(output_path), os.path.dirname(output_path)
-                )
-            except Exception as dump_error:
-                logger.warning(f"Could not download using dump: {str(dump_error)}")
+        if not pdf_url:
+            logger.error(f"No URL found for PDF item {item.get('key')}")
+            raise ValueError(f"No URL found for PDF item {item.get('key')}")
 
-                # Fallback to manual file download
-                try:
-                    # Get the file download URL
-                    file_url = (
-                        f"https://api.zotero.org/users/{user_id}/items/{pdf_key}/file"
-                    )
-                    headers = {"Zotero-API-Key": api_key}
+        # Convert arxiv abstract URLs to PDF URLs
+        if "arxiv.org/abs/" in pdf_url:
+            pdf_url = pdf_url.replace("/abs/", "/pdf/") + ".pdf"
 
-                    try:
-                        response = requests.get(
-                            file_url, headers=headers, allow_redirects=True, timeout=10
-                        )
-                        response.raise_for_status()
-
-                        with open(output_path, "wb") as f:
-                            f.write(response.content)
-                    except requests.exceptions.Timeout:
-                        logger.error(f"Timeout downloading PDF from {file_url}")
-                        raise TimeoutError(f"Download timeout for {file_url}")
-                except Exception as file_error:
-                    logger.error(
-                        f"All download attempts failed. Last error: {str(file_error)}"
-                    )
-                    raise
-
-        logger.info(f"PDF downloaded successfully to {output_path}")
-        return output_path
+        logger.info(f"Found PDF URL: {pdf_url}")
+        return pdf_url
 
     except Exception as e:
-        logger.error(f"Error downloading PDF: {str(e)}")
-        raise
-
-
-def extract_text_from_pdf(pdf_path):
-    """Extract text content from a PDF file using pdftotext"""
-    logger.info(f"Extracting text from PDF: {pdf_path}")
-
-    try:
-        # Create a temporary file for the text output
-        with tempfile.NamedTemporaryFile(suffix=".txt", delete=False) as tmp_file:
-            tmp_txt_path = tmp_file.name
-
-        # Use pdftotext (from poppler-utils) to extract text
-        subprocess.run(
-            ["/opt/homebrew/bin/pdftotext", "-layout", str(pdf_path), tmp_txt_path],
-            check=True,
-        )
-
-        # Read the text file
-        with open(tmp_txt_path, "r", encoding="utf-8", errors="replace") as f:
-            text = f.read()
-
-        # Clean up
-        os.unlink(tmp_txt_path)
-
-        text_length = len(text)
-        logger.info(f"Extracted {text_length} characters from PDF")
-
-        return text
-
-    except subprocess.CalledProcessError as e:
-        logger.error(f"Error running pdftotext: {str(e)}")
-        raise
-    except Exception as e:
-        logger.error(f"Error extracting text from PDF: {str(e)}")
+        logger.error(f"Error getting PDF URL: {str(e)}")
         raise
 
 
@@ -257,4 +176,74 @@ def mark_item_as_processed(item):
 
     except Exception as e:
         logger.error(f"Error marking item as processed: {str(e)}")
+        raise
+
+
+def harmonize_summaries(paper_summaries):
+    """Harmonize multiple paper summaries into a single podcast content using ChatGPT"""
+    logger.info(f"Harmonizing {len(paper_summaries)} paper summaries")
+
+    # Combine all summaries into a single prompt
+    combined_summaries = "\n\n---\n\n".join(
+        [f"Paper {i+1}:\n{summary}" for i, summary in enumerate(paper_summaries)]
+    )
+
+    prompt = f"""You are a podcast host creating an engaging daily AI research podcast. 
+You have summaries of {len(paper_summaries)} research papers. Your task is to create a cohesive, engaging podcast script that flows naturally between papers.
+
+IMPORTANT: The final script must be suitable for a 20-minute podcast episode (approximately 3200-3600 words maximum).
+
+Here are the paper summaries:
+
+{combined_summaries}
+
+Create a podcast script that:
+- Has a brief, engaging introduction to the episode (30 seconds)
+- Flows smoothly between papers with natural transitions
+- Maintains a conversational, enthusiastic tone throughout
+- Remains scientific and technical, covering the original content for each paper.
+- Is suitable for audio consumption (no visual elements)
+- Stays within 20 minutes total listening time (~3200-3600 words)
+
+Keep the content informative but concise. Focus on the most interesting and impactful aspects of each paper rather than covering every detail."""
+
+    try:
+        response = openai_client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are an expert podcast host specializing in AI research. Create engaging, conversational content suitable for audio.",
+                },
+                {"role": "user", "content": prompt},
+            ],
+            max_tokens=4000,
+            temperature=0.7,
+        )
+
+        harmonized_content = response.choices[0].message.content.strip()
+
+        # Check word count and truncate if necessary
+        word_count = len(harmonized_content.split())
+        logger.info(f"Harmonized content has {word_count} words")
+
+        if word_count > 3600:
+            logger.warning(
+                f"Content exceeds 3600 words ({word_count}), truncating to fit 20-minute limit"
+            )
+            words = harmonized_content.split()
+            truncated_content = " ".join(words[:3600])
+            # Try to end on a complete sentence
+            last_period = truncated_content.rfind(".")
+            if last_period > len(truncated_content) * 0.9:  # If period is in last 10%
+                harmonized_content = truncated_content[: last_period + 1]
+            else:
+                harmonized_content = truncated_content + "..."
+            logger.info(f"Content truncated to {len(harmonized_content.split())} words")
+
+        logger.info("Successfully harmonized summaries into podcast content")
+        return harmonized_content
+
+    except Exception as e:
+        logger.error(f"Error harmonizing summaries: {str(e)}")
         raise

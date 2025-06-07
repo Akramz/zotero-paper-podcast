@@ -26,13 +26,42 @@ def create_audio(text, output_path):
         # Ensure the output directory exists
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Split text into chunks of 4000 characters
-        chunks = [text[i : i + 4000] for i in range(0, len(text), 4000)]
+        # Split text into chunks of 4000 characters (OpenAI TTS limit)
+        max_chunk_size = 4000
+        chunks = []
+
+        # Split by sentences to avoid cutting off mid-sentence
+        sentences = text.split(". ")
+        current_chunk = ""
+
+        for sentence in sentences:
+            # Add sentence with period back
+            sentence_with_period = (
+                sentence + ". " if not sentence.endswith(".") else sentence + " "
+            )
+
+            if len(current_chunk + sentence_with_period) <= max_chunk_size:
+                current_chunk += sentence_with_period
+            else:
+                if current_chunk:
+                    chunks.append(current_chunk.strip())
+                current_chunk = sentence_with_period
+
+        # Add the last chunk
+        if current_chunk:
+            chunks.append(current_chunk.strip())
+
+        logger.info(f"Split text into {len(chunks)} chunks for TTS processing")
         temp_files = []
 
         # Process each chunk
         for i, chunk in enumerate(chunks):
+            if not chunk.strip():
+                continue
+
             temp_path = output_path.parent / f"chunk_{i}.mp3"
+            logger.info(f"Processing chunk {i+1}/{len(chunks)}")
+
             response = client.audio.speech.create(
                 model="tts-1",
                 voice="alloy",
