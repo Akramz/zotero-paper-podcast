@@ -10,7 +10,7 @@ An LLM system that automatically delivers daily personalized Spotify Postcasts f
 
 The repo covers the following:
 1. Fetches papers you've bookmarked in Zotero,
-2. Uses GPT-4o to generate podcast-style summaries.
+2. Uses GPT-4o to generate podcast-style summaries. The entire PDF is uploaded to OpenAI so the model can read the whole paper.
 3. Converts these summaries to speech using AI TTS.
 4. Creates a podcast feed that can be subscribed to in Spotify.
 
@@ -121,7 +121,7 @@ crontab -e
 
 ## TODO
 
-- Use OpenAI assistant API to serve papers as attachments
 - Ensure multi-paper jobs produce coherent podcast episodes
 - Add support for conversation-based podcasts
 - Update the feed file with new episodes (instead of resetting it to one episode)
+- Migrate to Podcast Addict

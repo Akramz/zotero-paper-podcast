@@ -1,70 +1,54 @@
 #!/usr/bin/env python3
 import os
 import logging
-from openai import OpenAI
+import anthropic
 from dotenv import load_dotenv
 
 logger = logging.getLogger(__name__)
 
 load_dotenv()
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
-SYSTEM_PROMPT = """You are an expert summarizer of academic papers. 
+SYSTEM_MESSAGE = """You are an expert summarizer of academic papers. 
 Your task is to create engaging, podcast-friendly summaries that capture the essence of research papers.
-Keep your responses clear, engaging and suitable for audio consumption."""
+Keep your responses clear, engaging and suitable for audio consumption.
 
-USER_PROMPT_TEMPLATE = """Answer the following questions about the paper in a podcast-friendly tone:
-1. What is the title of the paper?
-2. What institution(s) the authors come from?
-3. What is the problem addressed by the paper?
-4. Why is it an interesting problem?
-5. What dataset(s) were used in the paper?
-6. What is the proposed solution?
-7. What metrics were used to measure performance and what were the results?
-8. What baselines were compared against?
-9. What limitations does the paper mention?
+Answer the following questions about the paper in a podcast-friendly tone:
+- What is the title of the paper?
+- What institution(s) the authors come from?
+- What is the problem addressed by the paper?
+- Why is it an interesting problem?
+- What dataset(s) were used in the paper?
+- What is the proposed solution?
+- What metrics were used to measure performance and what were the results?
+- What baselines were compared against?
+- What limitations does the paper mention?
 
-The paper text has been truncated to fit within token limits. Focus on extracting information from the available content. Don't start with an intro, dive straight into the paper. Keep it short and concise.
-
-Paper content below:
-{paper_text}"""
+Don't start with an intro, dive straight into the paper. Keep it short and concise."""
 
 
-def truncate_text(text, max_chars=4000):  # 40000 (more capacity if you want)
-    """Truncate text to approximately max_chars."""
-    if len(text) <= max_chars:
-        return text
-
-    logger.info(f"Truncating paper from {len(text)} to {max_chars} characters")
-    return text[:max_chars]
-
-
-def create_summary(paper_text, max_chars=40000):
-    """Create a summary of a paper using GPT-4o."""
-    logger.info("Creating paper summary")
-
-    # Truncate text to avoid token limit errors
-    truncated_text = truncate_text(paper_text, max_chars)
+def create_summary(pdf_url):
+    """Create a summary of a paper using Claude with PDF URL."""
+    logger.info(f"Creating paper summary for PDF: {pdf_url}")
 
     try:
-        response = client.chat.completions.create(
-            model="gpt-4o",
+        message = client.messages.create(
+            model="claude-3-5-sonnet-20241022",
+            max_tokens=1024,
             messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
                 {
                     "role": "user",
-                    "content": USER_PROMPT_TEMPLATE.format(paper_text=truncated_text),
-                },
+                    "content": [
+                        {"type": "document", "source": {"type": "url", "url": pdf_url}},
+                        {"type": "text", "text": SYSTEM_MESSAGE},
+                    ],
+                }
             ],
-            temperature=0.3,
-            max_tokens=800,
         )
 
-        summary = response.choices[0].message.content.strip()
-        token_usage = response.usage.total_tokens
-        logger.info(f"Summary created successfully. Token usage: {token_usage}")
-
+        summary = message.content[0].text.strip()
+        logger.info("Summary created successfully")
         return summary
 
     except Exception as e:

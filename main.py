@@ -25,8 +25,12 @@ def main():
     zotero_api_key = os.getenv("ZOTERO_API_KEY")
     zotero_user_id = os.getenv("ZOTERO_USER_ID")
     s3_bucket = os.getenv("S3_BUCKET")
+    anthropic_api_key = os.getenv("ANTHROPIC_API_KEY")
+    openai_api_key = os.getenv("OPENAI_API_KEY")
 
-    if not all([zotero_api_key, zotero_user_id, s3_bucket]):
+    if not all(
+        [zotero_api_key, zotero_user_id, s3_bucket, anthropic_api_key, openai_api_key]
+    ):
         logger.error("Missing required environment variables")
         sys.exit(1)
 
@@ -50,21 +54,17 @@ def main():
         paper_summaries = []
         processed_items = []
 
-        # Process each paper
+        # Process each paper to get summaries
         for item in queue_items:
             try:
                 item_key = item["key"]
                 logger.info(f"Processing item {item_key}")
 
-                # Download PDF
-                pdf_path = tmp_path / f"{item_key}.pdf"
-                utils.download_zotero_pdf(item, pdf_path)
+                # Get PDF URL
+                pdf_url = utils.get_pdf_url(item)
 
-                # Extract text from PDF
-                paper_text = utils.extract_text_from_pdf(pdf_path)
-
-                # Create summary for individual paper
-                paper_summary = summarize.create_summary(paper_text)
+                # Create summary using PDF URL
+                paper_summary = summarize.create_summary(pdf_url)
                 paper_summaries.append(paper_summary)
                 processed_items.append(item)
 
@@ -77,21 +77,14 @@ def main():
             logger.warning("No items were successfully processed")
             return
 
-        # Create temp directory for audio chunks
-        audio_chunks = []
+        # Harmonize all summaries into single podcast content
+        logger.info("Harmonizing summaries into podcast content")
+        podcast_text = utils.harmonize_summaries(paper_summaries)
 
-        # Process each paper summary
-        for i, summary in enumerate(paper_summaries):
-            paper_text = f"Let's discuss the next paper:\n\n{summary}\n\n"
-            paper_path = tmp_path / f"paper_{i}.mp3"
-            logger.info(f"Generating audio for paper {i+1}")
-            tts.create_audio(paper_text, paper_path)
-            audio_chunks.append(paper_path)
-
-        # Combine all audio chunks
+        # Generate single audio file from harmonized content
         episode_path = tmp_path / episode_filename
-        logger.info("Combining all audio segments")
-        utils.concatenate_audio_files(audio_chunks, episode_path)
+        logger.info("Generating audio for podcast episode")
+        tts.create_audio(podcast_text, episode_path)
 
         # Upload to S3
         s3_audio_key = f"audio/{episode_filename}"
