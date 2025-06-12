@@ -4,5 +4,6 @@ pydub>=0.25.1
 podgen>=1.1.0
 boto3>=1.26.0
 requests>=2.28.1
-python-dotenv>=0.21.0 
+python-dotenv>=0.21.0
 openai>=1.1.0
+PyPDF2>=3.0.1
