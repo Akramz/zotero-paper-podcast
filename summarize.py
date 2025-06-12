@@ -96,7 +96,7 @@ def create_summary(pdf_url: str) -> str:
                 file=(processed_pdf.name, f, "application/pdf")
             )
 
-        message = client.messages.create(
+        message = client.beta.messages.create(
             model="claude-3-5-sonnet-20241022",
             max_tokens=1024,
             messages=[
@@ -111,6 +111,7 @@ def create_summary(pdf_url: str) -> str:
                     ],
                 }
             ],
+            betas=["pdfs-2024-09-25", "files-api-2025-04-14"],
         )
 
         summary = message.content[0].text.strip()
